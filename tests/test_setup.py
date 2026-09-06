@@ -1,6 +1,7 @@
 import contextlib
 import importlib.util
 import io
+import json
 from pathlib import Path
 import shutil
 import subprocess
@@ -77,6 +78,47 @@ class SetupTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.install(auto_reference=True)
         self.assertFalse((self.home / ".local").exists())
+
+    def test_hooks_preserve_unrelated_settings_and_are_idempotent(self):
+        settings = self.home / '.claude/settings.json'
+        settings.parent.mkdir(parents=True)
+        original = {'env': {'KEEP_ME': 'yes'}, 'hooks': {'SessionStart': [
+            {'matcher': 'startup', 'hooks': [{'type': 'command', 'command': 'echo existing'}]}]}}
+        settings.write_text(json.dumps(original))
+        self.install(hooks=True)
+        self.install(hooks=True)
+        result = json.loads(settings.read_text())
+        self.assertEqual(result['env'], original['env'])
+        self.assertEqual(result['hooks']['SessionStart'][0], original['hooks']['SessionStart'][0])
+        self.assertEqual(len(result['hooks']['SessionStart']), 2)
+        self.assertEqual(len(result['hooks']['UserPromptSubmit']), 1)
+        self.assertEqual(json.loads(settings.with_name(settings.name + '.shopify-changelog.bak').read_text()), original)
+        self.assertFalse((self.codex / 'AGENTS.md').exists())
+
+    def test_malformed_hook_settings_prevent_partial_install(self):
+        settings = self.home / '.claude/settings.json'
+        settings.parent.mkdir(parents=True)
+        settings.write_text('not json')
+        with self.assertRaises(ValueError):
+            self.install(hooks=True)
+        self.assertFalse((self.home / '.local').exists())
+        self.assertFalse((self.codex / 'hooks.json').exists())
+
+    def test_universal_skill_does_not_create_duplicate_codex_entry(self):
+        universal = self.home / '.agents/skills/shopify-changelog'
+        shutil.copytree(self.skill, universal)
+        with contextlib.redirect_stdout(io.StringIO()):
+            setup.install(universal, self.home, self.codex, agent='codex')
+        self.assertFalse((self.codex / 'skills/shopify-changelog').exists())
+
+    def test_previous_project_instructions_are_upgraded_in_place(self):
+        self.codex.mkdir(parents=True)
+        rules = self.codex / 'AGENTS.md'
+        rules.write_text('My rules.\n\n' + setup.LEGACY_INSTRUCTION_BLOCK)
+        self.install(auto_reference=True, agent='codex')
+        self.assertTrue(rules.read_text().startswith('My rules.'))
+        self.assertEqual(rules.read_text().count(setup.INSTRUCTION_HEADING), 1)
+        self.assertIn('project-aware check', rules.read_text())
 
 
 if __name__ == "__main__":

@@ -21,7 +21,7 @@ Requires **Python 3.9+**, SQLite with **FTS5**, `curl`, and Git. Intended for ma
 ```sh
 git clone https://github.com/buildwithzach/shopify-changelog.git
 cd shopify-changelog
-python3 install.py --agent both --auto-reference
+python3 install.py --agent both --auto-reference --hooks
 ~/.local/bin/shopify-updates sync
 ```
 
@@ -29,7 +29,7 @@ Choose `--agent codex`, `--agent claude`, or `--agent both`. Start a new agent s
 
 > Add subscription discounts to this Shopify app.
 
-The installer creates links for the selected agents and the CLI. **`--auto-reference` also appends a Shopify instruction to their user instruction files**, preserving existing text. Omit that flag to leave global instructions unchanged. No background service or scheduled job is installed.
+The installer creates links for the selected agents and the CLI. **`--hooks` merges offline session-start and prompt hooks into their hook settings**, preserving unrelated hooks and backing up existing settings before the first change. In Codex, review and trust the new hooks through `/hooks` once. Hooks disabled by user or administrator policy remain disabled. **`--auto-reference` also appends a Shopify instruction to their user instruction files**, preserving existing text. Omit that flag to leave global instructions unchanged. No background service or scheduled job is installed.
 
 Keep your clone in place: the installed links point to it. The installer refuses to overwrite unrelated files. If you have an active Codex user `AGENTS.override.md`, setup explains how to add the standing instruction there instead.
 
@@ -47,7 +47,34 @@ For standing automatic-reference instructions after this method, tell your agent
 
 > Set up the installed shopify-changelog skill for automatic use in Codex and Claude Code.
 
-The skill includes the setup script. You can also invoke it explicitly with `$shopify-changelog` in Codex or `/shopify-changelog` in Claude Code.
+The skill includes the setup script and can add the optional hooks with your authorization. You can also invoke it explicitly with `$shopify-changelog` in Codex or `/shopify-changelog` in Claude Code.
+
+## Check a project
+
+```sh
+shopify-updates inspect /path/to/project --json
+shopify-updates check /path/to/project --task "add order tracking"
+shopify-updates check /path/to/project --offline --json
+shopify-updates doctor
+```
+
+`inspect` detects Shopify packages, declared dependency ranges, selected source identifiers, extension targets, and scoped API version evidence. Each observation points to a file and line. It does not execute project code or resolve installed dependency versions.
+
+`check` refreshes stale feeds, then returns candidates with the announcement URL, publication date, source excerpts, local evidence, and a version assessment. Identifier matches rank above broad surface matches. **A candidate is a reason to investigate, not a confirmed bug.** Webhook versions are not treated as Admin API client versions, and version tags on announcements are not treated as universal minimum versions.
+
+The default publication window is 365 days (`--days` changes it). When no identifier matches are found, at most three broad surface matches are returned as fallback candidates. `--task` focuses results using recognized feature terms and identifiers; it is a lexical filter, not semantic understanding. `--limit` controls output size.
+
+Scanning is bounded to 2,000 selected files, 8 MB of text, and approximately three seconds. Files over 512 KB, symlinks, and dependency/build/test/documentation directories are excluded. Limit hits and unreadable files appear in the report. Unsupported configuration styles, dynamic API versions, and references outside scanned files need agent review. A check started below a Git checkout resolves to that checkout root; version evidence remains separated by package/extension component.
+
+See [the engineering notes](docs/ENGINEERING.md) for boundaries and [the worked example](docs/EXAMPLE.md) for a real-archive check against a small detection fixture.
+
+## Automatic checks
+
+The optional `SessionStart` hook injects a compact project check. `UserPromptSubmit` does the same when the prompt contains recognized Shopify/API terms. Non-Shopify projects and unrelated prompts are quiet. Hooks run offline, have an eight-second timeout, and do not block prompts or execute project scripts. They do not log prompts or upload project code. Stale or absent archives are reported, and the agent is instructed to refresh before relying on them.
+
+Hook execution depends on the host agent, policy, and trust settings. Codex requires `/hooks` review/trust for new definitions. `doctor` shows configuration presence, not proof that a hook ran. If the hook cannot complete, the prompt continues and no compatibility conclusion is asserted. Standing skill instructions remain useful for implicit tasks the keyword gate misses.
+
+Contracts: [Codex hooks](https://developers.openai.com/codex/hooks), [Claude Code hooks](https://code.claude.com/docs/en/hooks).
 
 ## CLI
 
@@ -89,7 +116,7 @@ Feed history is not guaranteed to include every historical announcement. `status
 
 Search excerpts are not AI summaries. Linked documents are not crawled. A merchant feature announcement doesn't establish API availability, and a preview or future API version isn't automatically usable in your project. The skill instructs the agent to check those distinctions and cite the original sources.
 
-It does not train the model, scan projects itself, or run in the background. Automatic referencing is agent guidance, not a deterministic hook on every message. No telemetry is implemented by this project's CLI; sync requests go to Shopify's public feeds. Third-party installation tools have their own policies.
+It does not train the model or run a background monitor. Project matching is a bounded heuristic. Trusted hooks provide predictable check entry points; the agent still interprets applicability. No telemetry is implemented by this project's CLI; sync requests go to Shopify's public feeds. Third-party installation tools have their own policies.
 
 ## Storage, updates, and uninstall
 
@@ -99,7 +126,7 @@ Back up the database to preserve old entries and revision history. It is exclude
 
 For a Git clone installation, update with `git pull --ff-only`. For Skills CLI installs, use `npx skills update -g`. Updating the skill leaves the default external archive in place.
 
-To remove a full installation, remove only the links setup created under `~/.codex/skills` (or `$CODEX_HOME/skills`), `~/.claude/skills`, and `~/.local/bin`. If enabled, also remove the `Shopify development context` section from the selected agents' user instruction files. The database stays until you choose to delete it. For a skill-only install, use `npx skills remove shopify-changelog -g`.
+To remove a full installation, remove only the links setup created under `~/.codex/skills` (or `$CODEX_HOME/skills`), `~/.claude/skills`, and `~/.local/bin`. If enabled, also remove the `Shopify development context` section from the selected agents' user instruction files. Remove only hook handlers whose `statusMessage` is `Shopify changelog project check` from Codex `hooks.json` and/or Claude `settings.json`; preserve unrelated handlers. The `.shopify-changelog.bak` files contain pre-install settings, but may predate later changes, so do not blindly restore them. The database stays until you choose to delete it. For a skill-only install, use `npx skills remove shopify-changelog -g`.
 
 ## Development
 
@@ -107,6 +134,6 @@ To remove a full installation, remove only the links setup created under `~/.cod
 python3 -m unittest discover -s tests -v
 ```
 
-Tests cover archive updates, search, version history, failure recovery, and isolated installation. Contributions and reproducible bug reports are welcome through [GitHub issues](https://github.com/buildwithzach/shopify-changelog/issues) and pull requests.
+Tests cover archive updates, search, version history, scoped project detection, task filtering, hook input/output contracts, failure recovery, and isolated installation. They use controlled fixtures; this is not a measured accuracy claim across real production projects. Native hook invocation must be verified in the installed agent after trust/restart. Contributions and reproducible bug reports are welcome through [GitHub issues](https://github.com/buildwithzach/shopify-changelog/issues) and pull requests.
 
 MIT licensed code. Shopify announcement content belongs to its respective owners. This is an independent community project, not an official Shopify product.
