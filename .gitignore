@@ -1,0 +1,8 @@
+shopify-changelog/data/
+__pycache__/
+*.pyc
+*.sqlite3
+*.sqlite3-*
+.DS_Store
+.env
+.env.*

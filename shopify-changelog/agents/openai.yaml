@@ -1,0 +1,4 @@
+interface:
+  display_name: "Shopify Changelog"
+  short_description: "Check Shopify changes against your current project"
+  default_prompt: "Use $shopify-changelog to check which recent Shopify changes affect this project."
