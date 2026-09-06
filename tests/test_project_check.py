@@ -99,6 +99,18 @@ class ProjectTests(unittest.TestCase):
         self.assertEqual(report['findings'], [])
         self.assertTrue(report['warnings'])
 
+    def test_incomplete_cli_check_has_distinct_exit_status(self):
+        self.app()
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            code = cli.main(['--db', str(self.db_path), 'check', str(self.root), '--offline', '--json'])
+        self.assertEqual(code, 2)
+        self.assertEqual(json.loads(output.getvalue())['status'], 'incomplete')
+
+    def test_hidden_source_files_do_not_trigger_project_detection(self):
+        self.write('.env.ts', 'import x from "@shopify/shopify-api";')
+        self.assertFalse(project_check.inspect_project(self.root)['is_shopify'])
+
     def test_source_symlinks_and_dependencies_are_excluded(self):
         self.write('package.json', '{}')
         external = Path(self.temp.name) / 'external.ts'

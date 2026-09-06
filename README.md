@@ -62,6 +62,8 @@ shopify-updates doctor
 
 `check` refreshes stale feeds, then returns candidates with the announcement URL, publication date, source excerpts, local evidence, and a version assessment. Identifier matches rank above broad surface matches. **A candidate is a reason to investigate, not a confirmed bug.** Webhook versions are not treated as Admin API client versions, and version tags on announcements are not treated as universal minimum versions.
 
+`check` exits with code 2 when the archive or scan is incomplete, code 1 on an operational error, and code 0 for a completed check or no detected Shopify project. Read the report status; success does not certify compatibility. Hooks always fail open.
+
 The default publication window is 365 days (`--days` changes it). When no identifier matches are found, at most three broad surface matches are returned as fallback candidates. `--task` focuses results using recognized feature terms and identifiers; it is a lexical filter, not semantic understanding. `--limit` controls output size.
 
 Scanning is bounded to 2,000 selected files, 8 MB of text, and approximately three seconds. Files over 512 KB, symlinks, and dependency/build/test/documentation directories are excluded. Limit hits and unreadable files appear in the report. Unsupported configuration styles, dynamic API versions, and references outside scanned files need agent review. A check started below a Git checkout resolves to that checkout root; version evidence remains separated by package/extension component.

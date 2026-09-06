@@ -423,7 +423,7 @@ def main(argv=None):
             report = project_check.check_project(db, project, args.days, args.limit, args.task)
             report['refresh_log'] = logs.getvalue().splitlines()
             print(json.dumps(report, indent=2) if args.json else project_check.render_report(report))
-            return 0
+            return 2 if report['status'] == 'incomplete' else 0
         db = connect(args.db)
         if args.command == "sync":
             return sync(db, args)

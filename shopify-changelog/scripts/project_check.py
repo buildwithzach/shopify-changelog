@@ -262,6 +262,7 @@ def render_report(report, compact=False):
              'Surfaces: ' + (', '.join(p['surfaces']) or 'unknown')]
     if not compact:
         lines.append('Project: ' + p['root'])
+        lines.extend('Refresh: ' + message for message in report.get('refresh_log', []))
         for v in p['versions']:
             lines.append(f"Version evidence: {v['value']} ({v['scope']}) at {v['path']}:{v['line']}")
     for feed in report['archive']:
